@@ -49,7 +49,7 @@ export interface LayerLevel { id: string; side: string; price: number; notionalU
  * Which panes are on the first time. No pane under the map is (Karl, 2026-10-17: depth and open interest were, and no extra pane should be):
  * each is one switch away. The flow column and the book beside the map are on.
  */
-export const DEFAULT_SHOW: AppState['show'] = { profile: true, traded: false, depth: false, oi: false, delta: false, ls: false, candles: true, footprint: false, stats: false, lt: false, mirror: true, volume: true, bubbles: true, cvd: true, book: true };
+export const DEFAULT_SHOW: AppState['show'] = { profile: true, traded: false, depth: false, oi: false, delta: false, ls: false, jdk: false, candles: true, footprint: false, stats: false, lt: false, mirror: true, volume: true, bubbles: true, cvd: true, book: true };
 /**
  * The panes a first visit starts with. The flow column and the book each take a few hundred pixels beside the map, so on a window that is wide enough
  * for the map to stay readable with both (a phone has its tabs instead) they start on; a medium window (a tablet held sideways, a small laptop)
@@ -91,7 +91,7 @@ export interface AppState {
   oiParts: OiPart[];
   /** One market's `oi` from an inverse market: the one price its coins are put at (its USD over it, `Hub.oiSeries`); 0 for a linear market. */
   oiPrice: number;
-  show: { profile: boolean; /** The traded-volume column beside the profile (not on phones). */ traded: boolean; depth: boolean; oi: boolean; /** The Delta pane under the map (taker delta and CVD by candle). */ delta: boolean; /** The Long/Short pane (the venues' published long/short account ratios). */ ls: boolean; candles: boolean; footprint: boolean; /** The Bar stats table under the map (its own switch since 2026-10-20; it was the footprint's before). */ stats: boolean; lt: boolean; mirror: boolean; volume: boolean; bubbles: boolean; /** The taker-flow (CVD) column left of the map, and the order book column right of it. */ cvd: boolean; book: boolean };
+  show: { profile: boolean; /** The traded-volume column beside the profile (not on phones). */ traded: boolean; depth: boolean; oi: boolean; /** The Delta pane under the map (taker delta and CVD by candle). */ delta: boolean; /** The Long/Short pane (the venues' published long/short account ratios). */ ls: boolean; /** The JDK Signals pane (order-flow reads marked per candle). */ jdk: boolean; candles: boolean; footprint: boolean; /** The Bar stats table under the map (its own switch since 2026-10-20; it was the footprint's before). */ stats: boolean; lt: boolean; mirror: boolean; volume: boolean; bubbles: boolean; /** The taker-flow (CVD) column left of the map, and the order book column right of it. */ cvd: boolean; book: boolean };
   /** The CVD column's settings. */
   cvd: CvdSettings;
   /** What counts as standing out (anomalous volume, OI change, ...), shared by every pane. */
@@ -168,7 +168,7 @@ export interface AppState {
    * Shared cursor: `t` is authoritative; each pane converts it to its own x. `price` is only set by the heatmap. `touch` marks a hover
    * that a finger pinned (it stays until the next tap or drag, and its readouts sit above the finger).
    */
-  hover: { t: number; price: number | null; y: number; source: 'heat' | 'depth' | 'oi' | 'lt' | 'bars' | 'cvd' | 'delta' | 'ls'; touch?: boolean } | null;
+  hover: { t: number; price: number | null; y: number; source: 'heat' | 'depth' | 'oi' | 'lt' | 'bars' | 'cvd' | 'delta' | 'ls' | 'jdk'; touch?: boolean } | null;
   /** The Range tool's selection (a box on the map, or a stretch of time), being dragged or made; and whether the next drag selects (range/). Not saved. */
   range: RangeSelection | null;
   rangeTool: boolean;

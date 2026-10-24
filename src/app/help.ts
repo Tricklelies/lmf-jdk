@@ -11,7 +11,7 @@ import { t } from './i18n.ts';
  * button opens (Trades, Absorption, Highlights, Sounds) has it in its panel's tool strip; a settings window opened from a pane's header
  * shares that pane's. Windows that only do a job (About, Install, the venue menu, the venue and coin pickers) explain themselves and have none.
  */
-export type HelpId = 'profile' | 'traded' | 'absorption' | 'depth' | 'oi' | 'candles' | 'footprint' | 'lt' | 'mirror' | 'volume' | 'bubbles' | 'heatmap' | 'depthPane' | 'oiPane' | 'ltPane' | 'stats' | 'orderBook' | 'cvd' | 'book' | 'highlights' | 'sounds' | 'range' | 'liquidations' | 'keyLevels' | 'vwap' | 'delta' | 'deltaPane' | 'ls' | 'lsPane' | 'replay' | 'candlePane';
+export type HelpId = 'profile' | 'traded' | 'absorption' | 'depth' | 'oi' | 'candles' | 'footprint' | 'lt' | 'mirror' | 'volume' | 'bubbles' | 'heatmap' | 'depthPane' | 'oiPane' | 'ltPane' | 'stats' | 'orderBook' | 'cvd' | 'book' | 'highlights' | 'sounds' | 'range' | 'liquidations' | 'keyLevels' | 'vwap' | 'delta' | 'deltaPane' | 'ls' | 'lsPane' | 'jdk' | 'jdkPane' | 'replay' | 'candlePane';
 
 export interface HelpTopic {
   title: string;
@@ -81,6 +81,18 @@ export const HELP: Readonly<Record<HelpId, HelpTopic>> = {
     title: t('Long/Short'), guide: 'lower-panes',
     tip: t('A pane under the map: the share of each exchange\'s accounts that is net long, as the exchanges publish it.'),
     body: [],
+  },
+  jdk: {
+    title: t('JDK Signals'), guide: 'lower-panes',
+    tip: t('A pane under the map: absorption, trapped traders, flushes, short covering and spot leading, each marked under the candle where it fired.'),
+    body: [],
+  },
+  jdkPane: {
+    title: t('JDK Signals'), guide: 'lower-panes',
+    tip: t('Absorption, trapped traders, flushes, short covering and spot leading, one row each, marked under the candle where each one fired.'),
+    body: [t('Each row is one order-flow read, judged on each closed candle of the chart\'s timeframe against the candles before it: heavy means at least twice the typical size of the last 96 candles. The flow is the flow column\'s ALL VENUES markets split into perpetual and spot, and open interest is the OI pane\'s markets.'),
+      t('Sellers absorbed (buyers absorbed): heavy market selling (buying) that the price did not follow. Shorts trapped (longs trapped): new positions opened into a fresh low (high), then a close back beyond the candle they opened on. Long flush: price fell on longs closing. Short covering: price rose on shorts closing, with spot not buying. Spot buying (selling): spot pushed harder than the perpetuals. A setup lights where a trap springs after absorption, with spot not leaning the other way.'),
+      t('A dot stays on its candle: hover it for the numbers it was judged on, and Export CSV saves the candles in view. The signals need recorded flow: the candles before the recording and the first 96 after it have none. These reads have not been tested as a signal on their own; they are meant to be read at a level.')],
   },
   lsPane: {
     title: t('Long/Short'), guide: 'lower-panes',

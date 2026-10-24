@@ -18,7 +18,7 @@ const topOf = (traded: AppState['traded']): { on: boolean; metric: string } => {
 };
 
 test('a first visit starts with no pane under the map, and the flow column and the book beside it', () => {
-  for (const key of ['depth', 'oi', 'delta', 'ls', 'lt', 'footprint'] as const) assert.equal(DEFAULT_SHOW[key], false, key);
+  for (const key of ['depth', 'oi', 'delta', 'ls', 'jdk', 'lt', 'footprint'] as const) assert.equal(DEFAULT_SHOW[key], false, key);
   assert.equal(defaultShow(1920).cvd, true);
   assert.equal(defaultShow(1920).book, true);
 });

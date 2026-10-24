@@ -62,7 +62,7 @@ export abstract class TimePane {
   /** What the map does with a gesture on the time axis these panes share with it (set by `useTimeGestures`). */
   #time: ReturnType<HeatPane['timeGestures']> | null = null;
   #pinned: Pt | null = null;
-  #source: 'depth' | 'oi' | 'lt' | 'bars' | 'delta' | 'ls';
+  #source: 'depth' | 'oi' | 'lt' | 'bars' | 'delta' | 'ls' | 'jdk';
   /** Where the pointer (or the pinned finger) is, in the page, for a popup that is a page element rather than canvas drawing. */
   protected pointer: { x: number; y: number } | null = null;
   /** The Range tool (set by the page), and a stretch of time being selected here: where the drag began, and where a finger last was. */
@@ -75,7 +75,7 @@ export abstract class TimePane {
     this.root.append(this.head, this.canvas); host.append(this.root);
     this.ctx = this.canvas.getContext('2d')!;
     new ResizeObserver(() => this.#resize()).observe(this.canvas);
-    const source = this.#source = cls as 'depth' | 'oi' | 'lt' | 'bars' | 'delta' | 'ls';
+    const source = this.#source = cls as 'depth' | 'oi' | 'lt' | 'bars' | 'delta' | 'ls' | 'jdk';
     // A drag across a pane selects a stretch of time for the Range tool while it is armed, or with Ctrl (Cmd on a Mac) held.
     this.canvas.addEventListener('pointerdown', e => {
       this.rangeGesture = false;

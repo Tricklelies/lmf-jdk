@@ -23,6 +23,7 @@ import { CvdPane } from './panes/cvd-pane.ts';
 import { BarStatsPane, DepthPane, LtPane, OiPane } from './panes/lower-panes.ts';
 import { DeltaPane } from './panes/delta-pane.ts';
 import { LsPane } from './panes/ls-pane.ts';
+import { JdkPane } from './panes/jdk-pane.ts';
 import { CandlePane } from './panes/candle-pane.ts';
 import { matchShortcut, togglePatch } from './shortcuts.ts';
 import { ReplayBar } from './replay/bar.ts';
@@ -104,6 +105,7 @@ async function main(): Promise<void> {
   const delta = new DeltaPane(chart, store, heat.view, hub);
   heat.divergences = () => delta.divergences; delta.onDivergences = () => heat.invalidate();
   const ls = new LsPane(chart, store, heat.view, hub);
+  const jdk = new JdkPane(chart, store, heat.view, hub);
   const lt = new LtPane(chart, store, heat.view, hub);
   const ladder = new LadderPane(side, store, kernels, hub);
   const cvd = new CvdPane(flowCol, store, hub, heat.view);
@@ -117,17 +119,18 @@ async function main(): Promise<void> {
     { id: 'oi', root: oi.root, height: 150, min: 60, head: oi.header },
     { id: 'delta', root: delta.root, height: 150, min: 60, head: delta.header },
     { id: 'ls', root: ls.root, height: 120, min: 60, head: ls.header },
+    { id: 'jdk', root: jdk.root, height: 160, min: 110, head: jdk.header },
     { id: 'lt', root: lt.root, height: 128, min: 70, head: lt.header },
   ], flowCol);
-  const lower = () => { depth.invalidate(); oi.invalidate(); delta.invalidate(); ls.invalidate(); lt.invalidate(); bars.invalidate(); cvd.followMap(); };
+  const lower = () => { depth.invalidate(); oi.invalidate(); delta.invalidate(); ls.invalidate(); jdk.invalidate(); lt.invalidate(); bars.invalidate(); cvd.followMap(); };
   // Replay: the map's candle under way is rebuilt from the flow, so flow arriving while paused redraws it too (live, the map has its own pace).
   // The volume profile along the top of the map draws traded volume from the flow too: history that has landed redraws it (a live second
   // does not, `loads`; the map is drawn several times a second while frames come anyway), with the Delta pane hidden as well.
   let stripLoads = hub.flow.loads;
   // The open-interest markets are worked out from the flow and the books on the map, which come after the candles: asked again as they do.
-  hub.onFlowChanged = () => { cvd.invalidate(); delta.invalidate(); const landed = stripLoads !== hub.flow.loads; stripLoads = hub.flow.loads; if (replaying() || (landed && topShown(store.state))) heat.invalidate(); hub.refreshOiMarkets(); };
+  hub.onFlowChanged = () => { cvd.invalidate(); delta.invalidate(); jdk.invalidate(); const landed = stripLoads !== hub.flow.loads; stripLoads = hub.flow.loads; if (replaying() || (landed && topShown(store.state))) heat.invalidate(); hub.refreshOiMarkets(); };
   // A finger on a pane under the map moves the time axis it shares with the map.
-  for (const pane of [depth, oi, delta, ls, lt, bars]) pane.useTimeGestures(heat.timeGestures());
+  for (const pane of [depth, oi, delta, ls, jdk, lt, bars]) pane.useTimeGestures(heat.timeGestures());
   heat.onFrame = lower; heat.onView = lower;
   heat.onTopProfile = () => toolbar.openTradedPanel();
   heat.onArrangedChange = () => toolbar.refreshTradedPanel();
@@ -135,7 +138,7 @@ async function main(): Promise<void> {
   toolbar.profileRoom = () => heat.profileRoom();
   // The Range tool: a drag on the map, on a pane under it or across the flow column selects, and its panel adds up what happened there.
   const range = new RangeTool(store, hub); range.anchor = toolbar.rangeButton; range.mapWindow = () => ({ t0: heat.view.t0, t1: heat.view.t1 });
-  heat.range = range; cvd.range = range; for (const pane of [depth, oi, delta, ls, lt, bars]) pane.useRange(range);
+  heat.range = range; cvd.range = range; for (const pane of [depth, oi, delta, ls, jdk, lt, bars]) pane.useRange(range);
   toolbar.onRange = () => range.toggle();
   toolbar.onRecenter = () => { heat.fit(); ladder.recenter(); };
   // The countdown under the price tag: a redraw a second when nothing else draws the map.
@@ -193,7 +196,7 @@ async function main(): Promise<void> {
   hub.onAbsorptionChanged = () => { heat.invalidate(); range.refreshHeld(); };
   toolbar.absorptionInfo = () => heat.absorptionThresholdText();
   // Hovering a theme shows it everywhere without saving it; leaving the menu puts the saved one back.
-  toolbar.onPreviewTheme = id => { const name = id ?? store.state.theme; glass.setPalette(applyTheme(name)); for (const p of [heat, ladder, depth, oi, delta, ls, lt, bars, cvd, candle]) p.setPalette(name); toolbar.previewTheme(name); };
+  toolbar.onPreviewTheme = id => { const name = id ?? store.state.theme; glass.setPalette(applyTheme(name)); for (const p of [heat, ladder, depth, oi, delta, ls, jdk, lt, bars, cvd, candle]) p.setPalette(name); toolbar.previewTheme(name); };
   heat.onStats = () => toolbar.sync(store.state, heat.window);
 
   // An address like #guide/mirror opens the guide there.
@@ -229,7 +232,7 @@ async function main(): Promise<void> {
   const layout = () => {
     const s = store.state;
     gutters();
-    depth.root.hidden = !s.show.depth; oi.root.hidden = !s.show.oi; delta.root.hidden = !s.show.delta; ls.root.hidden = !s.show.ls; lt.root.hidden = !s.show.lt; bars.root.hidden = !s.show.stats;
+    depth.root.hidden = !s.show.depth; oi.root.hidden = !s.show.oi; delta.root.hidden = !s.show.delta; ls.root.hidden = !s.show.ls; jdk.root.hidden = !s.show.jdk; lt.root.hidden = !s.show.lt; bars.root.hidden = !s.show.stats;
     // The two side panels vanish and return at once: nothing is rebuilt, a hidden column is simply not laid out.
     cvd.root.hidden = !s.show.cvd; ladder.root.hidden = !s.show.book;
     arrange.columns({ flow: s.show.cvd, book: s.show.book });
@@ -244,7 +247,7 @@ async function main(): Promise<void> {
     if (changed.has('keepAwake')) wake.set(state.keepAwake);
     // Every time on the page is written from the one setting: say it changed, and have what shows times draw again.
     if (changed.has('timeZone')) { setTimeZone(state.timeZone); heat.invalidate(); lower(); cvd.invalidate(); showStatus(); }
-    if (changed.has('theme')) { glass.setPalette(applyTheme(state.theme)); for (const p of [heat, ladder, depth, oi, delta, ls, lt, bars, cvd, candle]) p.setPalette(state.theme); }
+    if (changed.has('theme')) { glass.setPalette(applyTheme(state.theme)); for (const p of [heat, ladder, depth, oi, delta, ls, jdk, lt, bars, cvd, candle]) p.setPalette(state.theme); }
     if (changed.has('material')) { applyMaterial(); hub.setTape(tapeWanted()); }
     if (changed.has('cvd')) cvd.settingsChanged();
     if (changed.has('status') || changed.has('connected') || changed.has('mark')) showStatus();
@@ -279,7 +282,7 @@ async function main(): Promise<void> {
     if (changed.has('barStatOptions') || changed.has('footprint') || changed.has('barStats')) bars.refresh();
     if (changed.has('grouping') || changed.has('ladderMode') || changed.has('ladderShow') || changed.has('ladderCurves') || changed.has('cvd') || changed.has('pullStack') || changed.has('ladderVenue') || changed.has('ladderVenues') || changed.has('disabledVenues') || changed.has('scope')) { ladder.invalidate(); ladder.syncControls(); }
     if (changed.has('range')) { heat.invalidate(); oi.invalidate(); depth.invalidate(); lt.invalidate(); bars.invalidate(); cvd.invalidate(); }
-    if (changed.has('hover')) { heat.invalidate(); oi.invalidate(); delta.invalidate(); ls.invalidate(); depth.invalidate(); lt.invalidate(); bars.invalidate(); cvd.syncHover(); }
+    if (changed.has('hover')) { heat.invalidate(); oi.invalidate(); delta.invalidate(); ls.invalidate(); jdk.invalidate(); depth.invalidate(); lt.invalidate(); bars.invalidate(); cvd.syncHover(); }
     if (changed.has('delta')) delta.settingsChanged();
     if ((changed.has('oi') || changed.has('oiParts')) && topShown(state)) heat.invalidate();
     if (changed.has('marketId')) candle.marketChanged();
@@ -288,11 +291,12 @@ async function main(): Promise<void> {
     // The panes follow the room the bar leaves or takes by themselves (each watches its own size).
     if (changed.has('barCollapsed')) toolbar.setCollapsed(state.barCollapsed);
     if (['show', 'timeframe', 'marketId', 'disabledVenues', 'scope', 'markets', 'oiMarkets', 'customMarkets', 'oiInstrument', 'oiParts', 'seriesInstrument', 'range'].some(k => changed.has(k as never))) ls.invalidate();
+    if (['show', 'timeframe', 'marketId', 'disabledVenues', 'scope', 'markets', 'oiMarkets', 'customMarkets', 'oiInstrument', 'oiParts', 'oi', 'candles', 'seriesInstrument', 'range', 'theme'].some(k => changed.has(k as never))) jdk.invalidate();
     if (['show', 'candles', 'timeframe', 'marketId', 'disabledVenues', 'scope', 'markets', 'traded', 'timeZone', 'range', 'oi', 'oiInstrument', 'oiParts'].some(k => changed.has(k as never))) delta.invalidate();
     if (['markets', 'marketId', 'timeframe', 'layer', 'show', 'heat', 'theme', 'status', 'connected', 'disabledVenues', 'heatmapSource', 'levels', 'scope', 'sounds', 'soundState', 'lastSound', 'timeZone', 'absorption', 'highlight', 'range', 'rangeTool', 'liquidations', 'keyLevels', 'vwap', 'footprint'].some(k => changed.has(k as never))) toolbar.sync(state, heat.window);
   });
 
-  for (const p of [heat, ladder, depth, oi, delta, ls, lt, bars, cvd, candle]) p.setPalette(store.state.theme);
+  for (const p of [heat, ladder, depth, oi, delta, ls, jdk, lt, bars, cvd, candle]) p.setPalette(store.state.theme);
   layout(); ladder.syncControls(); lt.refresh();
   arrange.setPaneHeight('bars', tableHeight(store.state.barStats, store.state.barStatOptions));
   toolbar.sync(store.state, heat.window);

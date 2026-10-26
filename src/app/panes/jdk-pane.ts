@@ -1,5 +1,5 @@
 import { TIMEFRAMES, type Hub } from '../hub.ts';
-import type { Store, AppState, OiBar } from '../store.ts';
+import type { Store, AppState, OiBar, CandleRow } from '../store.ts';
 import type { View } from '../view.ts';
 import { helpButton } from '../help.ts';
 import { setTip } from '../tip.ts';
@@ -32,6 +32,11 @@ const LEAD = DEFAULT_SIGNAL_PARAMS.N + DEFAULT_SIGNAL_PARAMS.X + DEFAULT_SIGNAL_
 const MAX_CANDLES = 10_200;
 /** A model whose data changed is worked out again at most this often (closed candles do not change; late readings do). */
 const REFRESH_MS = 5_000;
+/** The exchange's own candles (the chart's price history) are read again at most this often, and at most this many at once. */
+const PRICE_REFRESH_MS = 60_000, PRICE_BARS = 2_000;
+
+/** The chart market's exchange candles for the pane's candles: the page's own candles cover only what was recorded or loaded live. */
+interface PriceRows { key: string; rows: Map<number, CandleRow>; from: number; to: number; asOf: number; at: number; loading: boolean; version: number }
 
 const signedUsd = (v: number): string => !Number.isFinite(v) ? '–' : `${v > 0 ? '+' : v < 0 ? '−' : ''}$${usd(Math.abs(v))}`;
 const times = (v: number, typical: number): string => Number.isFinite(v) && typical > 0 ? t('{x}× typical', { x: (Math.abs(v) / typical).toFixed(1) }) : '–';
@@ -72,6 +77,7 @@ export class JdkPane extends TimePane {
   #perpCache = new FlowCache();
   #spotCache = new FlowCache();
   #model: Model | null = null;
+  #prices: PriceRows | null = null;
 
   constructor(host: HTMLElement, store: Store, view: View, private hub: Hub) {
     super(host, store, view, 'jdk');
@@ -93,6 +99,33 @@ export class JdkPane extends TimePane {
   }
   protected override undrawn(): void { this.#lines = null; this.#card.hide(); }
 
+  /**
+   * The exchange's candles of the chart market over [first, last] at the chart's timeframe, from the data source's price history (the
+   * same one the map draws where its own candles are missing). Asked for again when the range moves past what is held or a minute has
+   * passed; the pane is drawn again when they land.
+   */
+  #priceRows(state: AppState, first: number, last: number, tf: number): PriceRows | null {
+    const read = this.hub.source.priceHistory?.bind(this.hub.source);
+    if (!read) return null;
+    const key = `${state.marketId}|${state.timeframe}`;
+    let held = this.#prices && this.#prices.key === key ? this.#prices : null;
+    const from = Math.max(first, last - (PRICE_BARS - 1) * tf), to = last + tf;
+    const covers = held !== null && held.from <= from && held.to >= to;
+    if (held?.loading || (covers && Date.now() - held!.at < PRICE_REFRESH_MS)) return held;
+    if (!held) { held = { key, rows: new Map(), from: Infinity, to: -Infinity, asOf: 0, at: 0, loading: false, version: 0 }; this.#prices = held; }
+    const entry = held;
+    entry.loading = true;
+    read(state.marketId, state.timeframe, from, to)
+      .then(answer => {
+        for (const row of answer.candles) entry.rows.set(row[0], row);
+        if (answer.status !== 'failed') { entry.from = Math.min(entry.from, answer.from); entry.to = Math.max(entry.to, answer.to); entry.asOf = Math.max(entry.asOf, answer.asOf); }
+        entry.version++;
+      })
+      .catch(() => { /* asked again after PRICE_REFRESH_MS */ })
+      .finally(() => { entry.at = Date.now(); entry.loading = false; if (this.#prices === entry) this.invalidate(); });
+    return entry;
+  }
+
   /** The candles from LEAD before the view to its right edge (closed ones only), their flow and open interest, and their signals. */
   #modelFor(state: AppState, now: number): Model | null {
     const v = this.view, tf = TIMEFRAMES[state.timeframe] ?? 3_600_000, flow = this.hub.flow;
@@ -107,7 +140,8 @@ export class JdkPane extends TimePane {
     const perpIds = lanes.filter(l => l.kind === 'perp').map(l => l.id), spotIds = lanes.filter(l => l.kind === 'spot').map(l => l.id);
     const parts: readonly OiPart[] = replaying() ? oiPartsUntil(state.oiParts, tf, now) : state.oiParts;
     const oiBars: readonly OiBar[] = replaying() ? state.oi.filter(b => b[0] + tf <= now) : state.oi;
-    const key = `${perpIds.join(',')}|${spotIds.join(',')}|${tf}|${first}|${last}|${flow.loads}`;
+    const prices = this.#priceRows(state, first, last, tf);
+    const key = `${perpIds.join(',')}|${spotIds.join(',')}|${tf}|${first}|${last}|${flow.loads}|${prices?.version ?? 0}`;
     const refs = [state.oi, state.oiParts, state.candles] as const;
     const held = this.#model, wall = Date.now();
     if (held && held.key === key && (held.refs.every((r, k) => r === refs[k]) || wall - held.at < REFRESH_MS)) return held;
@@ -115,9 +149,14 @@ export class JdkPane extends TimePane {
     const spot = deltaFlows(this.#spotCache, flow, spotIds, starts, tf, now);
     const doi = oiChangeByTime(oiBars, parts, tf);
     const bars = new Map(state.candles.map(c => [c[0], c] as const));
+    // One source per run of candles where possible: the chart's own candles when they are the chart market's, else the exchange's. An
+    // exchange candle still open when it was read is never used (it would change once read again, and a signal must not).
+    const priced = (s: number): CandleRow | undefined => { const r = prices?.rows.get(s); return r && r[0] + tf <= prices!.asOf ? r : undefined; };
+    const own = state.seriesInstrument === state.marketId;
+    const candleAt = (s: number): CandleRow | undefined => own ? bars.get(s) ?? priced(s) : priced(s) ?? bars.get(s);
     const split = (f: CandleFlow | null | undefined): [number, number] => f ? [(f.gross + f.delta) / 2, (f.gross - f.delta) / 2] : [NaN, NaN];
     const candles: FlowCandle[] = starts.map((s, i) => {
-      const c = bars.get(s), [pb, ps] = split(perp.flows[i]), [sb, ss] = spotIds.length ? split(spot.flows[i]) : [NaN, NaN];
+      const c = candleAt(s), [pb, ps] = split(perp.flows[i]), [sb, ss] = spotIds.length ? split(spot.flows[i]) : [NaN, NaN];
       return { t: s, o: c?.[1] ?? NaN, h: c?.[2] ?? NaN, l: c?.[3] ?? NaN, c: c?.[4] ?? NaN, pb, ps, sb, ss, oi: NaN, doi: doi.get(s) ?? NaN };
     });
     const model: Model = {

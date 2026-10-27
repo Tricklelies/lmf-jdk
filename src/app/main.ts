@@ -40,12 +40,20 @@ import './chrome.css';
 import { t } from './i18n.ts';
 import { useMarkets } from './venue-marks.ts';
 
-/** True when the page is being served by the local server (its state endpoint answers with JSON on this very origin). */
+/**
+ * True when the page is being served by the server (its state endpoint answers with JSON on this very origin). A server across the
+ * internet (behind a proxy, while the page's own files are still loading) can take a few seconds to answer the first time, and a page
+ * that gave up on it would record in the browser instead, from nothing: so it is given 8 s and asked twice. A static host answers at
+ * once (404, or HTML), so this costs it nothing.
+ */
 async function serverAnswers(): Promise<boolean> {
-  try {
-    const response = await fetch('api/v2/state', { signal: AbortSignal.timeout(1_500), cache: 'no-store' });
-    return response.ok && (response.headers.get('content-type') ?? '').includes('json');
-  } catch { return false; }
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const response = await fetch('api/v2/state', { signal: AbortSignal.timeout(8_000), cache: 'no-store' });
+      return response.ok && (response.headers.get('content-type') ?? '').includes('json');
+    } catch { /* no answer in time, or the network failed: ask once more */ }
+  }
+  return false;
 }
 
 /**
